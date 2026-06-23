@@ -766,23 +766,53 @@
             gap: 12px;
             flex-wrap: wrap;
             margin-bottom: 16px;
-            align-items: center;
-        }
-
-        .comparison-controls select {
-            padding: 8px 16px;
-            border: 2px solid #d8eddd;
-            border-radius: 10px;
-            font-size: 0.9rem;
-            font-family: inherit;
+            align-items: flex-start;
             background: white;
-            cursor: pointer;
-            min-width: 150px;
+            padding: 16px 20px;
+            border-radius: 14px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
         }
 
-        .comparison-controls select:focus {
-            border-color: #52b788;
-            outline: none;
+        .comparison-controls .label {
+            font-weight: 600;
+            color: #2d6a4f;
+            font-size: 0.95rem;
+            min-width: 120px;
+        }
+
+        .comparison-controls .student-checkboxes {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px 16px;
+            flex: 1;
+        }
+
+        .comparison-controls .student-checkboxes label {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.9rem;
+            color: #1a3a2e;
+            cursor: pointer;
+            padding: 2px 8px;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+
+        .comparison-controls .student-checkboxes label:hover {
+            background: #e8f5ee;
+        }
+
+        .comparison-controls .student-checkboxes input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            accent-color: #2d6a4f;
+            cursor: pointer;
+        }
+
+        .comparison-controls .student-checkboxes .checked-label {
+            background: #d8eddd;
+            border-radius: 6px;
         }
 
         .comparison-chart-container {
@@ -843,6 +873,8 @@
             .panel { padding: 16px; }
             .student-view .student-selector { flex-direction: column; align-items: stretch; }
             .student-view .student-selector select { max-width: 100%; }
+            .comparison-controls { flex-direction: column; align-items: stretch; }
+            .comparison-controls .student-checkboxes { max-height: 120px; overflow-y: auto; }
         }
 
         .hidden {
@@ -1078,10 +1110,10 @@
         </div>
 
         <div class="comparison-controls">
-            <label for="compareStudentsSelect" style="font-weight:600; color:#2d6a4f;">📊 So sánh với:</label>
-            <select id="compareStudentsSelect" multiple style="min-width:250px; max-height:100px;" onchange="updateComparisonChart()">
-            </select>
-            <span style="font-size:0.8rem; color:#6b8c7e;">(Giữ Ctrl để chọn nhiều)</span>
+            <span class="label">📊 So sánh với:</span>
+            <div class="student-checkboxes" id="compareCheckboxes">
+                <!-- Checkboxes will be generated here -->
+            </div>
         </div>
 
         <div class="comparison-chart-container">
@@ -1225,21 +1257,17 @@
             });
     }
 
-    // Auto sync listener - real-time updates
     function startAutoSync() {
         if (syncInterval) clearInterval(syncInterval);
-        // Auto sync every 30 seconds
         syncInterval = setInterval(() => {
             if (isAdmin && students.length > 0) {
                 syncToFirebase();
             }
         }, 30000);
 
-        // Listen for real-time changes from Firebase
         db.ref('classData').on('value', (snapshot) => {
             const data = snapshot.val();
             if (data && data.students) {
-                // Only update if data changed and not in admin mode (to avoid loops)
                 if (!isAdminMode) {
                     students = data.students;
                     if (students.length > 0 && !currentStudentId) {
@@ -1289,7 +1317,6 @@
         disableAdminMode();
         updateUI();
         showToast('👋 Đã đăng xuất');
-        // Still listen for updates in view mode
         startAutoSync();
     }
 
@@ -1326,7 +1353,6 @@
             el.style.display = '';
         });
         renderDetailById(currentStudentId);
-        // Re-render student list with delete buttons
         renderStudentList();
     }
 
@@ -1418,7 +1444,7 @@
         renderDetailById(currentStudentId);
         renderStudentView();
         populateStudentSelect();
-        populateCompareSelect();
+        populateCompareCheckboxes();
     }
 
     function renderStats() {
@@ -1494,7 +1520,7 @@
         renderDetailById(id);
         renderStudentView();
         populateStudentSelect();
-        populateCompareSelect();
+        populateCompareCheckboxes();
     }
 
     function renderDetailById(id) {
@@ -1646,14 +1672,41 @@
         else if (currentStudentId) select.value = currentStudentId;
     }
 
-    function populateCompareSelect() {
-        const select = document.getElementById('compareStudentsSelect');
-        const currentValues = Array.from(select.selectedOptions).map(opt => opt.value);
-        select.innerHTML = '';
+    function populateCompareCheckboxes() {
+        const container = document.getElementById('compareCheckboxes');
+        if (students.length <= 1) {
+            container.innerHTML = '<span style="color:#6b8c7e; font-size:0.9rem;">Chưa có học sinh khác để so sánh</span>';
+            return;
+        }
+        
+        let html = '';
         students.forEach(s => {
             if (s.id !== currentStudentId) {
-                const selected = currentValues.includes(s.id) ? 'selected' : '';
-                select.innerHTML += `<option value="${s.id}" ${selected}>${s.name}</option>`;
+                const checked = sessionStorage.getItem(`compare_${s.id}`) === 'true' ? 'checked' : '';
+                html += `
+                    <label class="${checked ? 'checked-label' : ''}">
+                        <input type="checkbox" value="${s.id}" ${checked} onchange="toggleCompareStudent('${s.id}', this.checked)">
+                        ${s.name}
+                    </label>
+                `;
+            }
+        });
+        container.innerHTML = html;
+        updateComparisonChart();
+    }
+
+    function toggleCompareStudent(id, checked) {
+        sessionStorage.setItem(`compare_${id}`, checked.toString());
+        // Update label style
+        const labels = document.querySelectorAll('#compareCheckboxes label');
+        labels.forEach(label => {
+            const input = label.querySelector('input');
+            if (input && input.value === id) {
+                if (checked) {
+                    label.classList.add('checked-label');
+                } else {
+                    label.classList.remove('checked-label');
+                }
             }
         });
         updateComparisonChart();
@@ -1667,7 +1720,7 @@
             if (isAdminMode) {
                 renderDetailById(currentStudentId);
                 renderStudentList();
-                populateCompareSelect();
+                populateCompareCheckboxes();
             }
         }
     }
@@ -1737,6 +1790,7 @@
         }
 
         renderChart(student);
+        populateCompareCheckboxes();
         updateComparisonChart();
     }
 
@@ -1749,7 +1803,14 @@
             chartInstance = new Chart(ctx, {
                 type: 'line',
                 data: { labels: ['Chưa có dữ liệu'], datasets: [{ label: 'Điểm', data: [0], borderColor: '#52b788' }] },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false, 
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { min: 0, max: 10, ticks: { stepSize: 1 } }
+                    }
+                }
             });
             return;
         }
@@ -1801,21 +1862,48 @@
         if (comparisonChartInstance) { comparisonChartInstance.destroy(); comparisonChartInstance = null; }
 
         const student = students.find(s => s.id === currentStudentId);
-        if (!student) return;
+        if (!student) {
+            comparisonChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: { labels: ['Chọn học sinh'], datasets: [{ label: 'Điểm', data: [0], borderColor: '#52b788' }] },
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false, 
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { min: 0, max: 10, ticks: { stepSize: 1 } }
+                    }
+                }
+            });
+            return;
+        }
 
-        const select = document.getElementById('compareStudentsSelect');
-        const selectedIds = Array.from(select.selectedOptions).map(opt => opt.value);
-        const compareStudents = students.filter(s => selectedIds.includes(s.id));
+        // Get checked students
+        const checkedBoxes = document.querySelectorAll('#compareCheckboxes input[type="checkbox"]:checked');
+        const compareStudents = students.filter(s => {
+            for (let cb of checkedBoxes) {
+                if (cb.value === s.id) return true;
+            }
+            return false;
+        });
 
         if (compareStudents.length === 0) {
             comparisonChartInstance = new Chart(ctx, {
                 type: 'line',
                 data: { labels: ['Chọn học sinh để so sánh'], datasets: [{ label: 'Điểm', data: [0], borderColor: '#52b788' }] },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false, 
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { min: 0, max: 10, ticks: { stepSize: 1 } }
+                    }
+                }
             });
             return;
         }
 
+        // Get all months
         const allMonths = new Set();
         const allStudents = [student, ...compareStudents];
         allStudents.forEach(s => {
@@ -1871,7 +1959,12 @@
                     }
                 },
                 scales: {
-                    y: { min: 0, max: 10, ticks: { stepSize: 1 }, grid: { color: 'rgba(0,0,0,0.05)' } },
+                    y: { 
+                        min: 0, 
+                        max: 10, 
+                        ticks: { stepSize: 1 }, 
+                        grid: { color: 'rgba(0,0,0,0.05)' } 
+                    },
                     x: { grid: { display: false } }
                 }
             }
@@ -1893,9 +1986,7 @@
             loadFromFirebase();
             startAutoSync();
         } else {
-            // Still listen for updates in view mode
             startAutoSync();
-            // Load data from Firebase for view mode
             loadFromFirebase();
         }
 
@@ -1913,7 +2004,7 @@
             currentStudentId = students[0].id;
             renderStudentView();
             populateStudentSelect();
-            populateCompareSelect();
+            populateCompareCheckboxes();
         }
 
         document.getElementById('loginOverlay').addEventListener('click', (e) => {
