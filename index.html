@@ -8,7 +8,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
     <style>
-        /* ... phần CSS giữ nguyên như bạn đã có ... */
+        /* ... CSS giữ nguyên như cũ ... */
         * {
             margin: 0;
             padding: 0;
@@ -1036,6 +1036,8 @@
 </head>
 <body>
 
+<!-- Phần HTML giữ nguyên như cũ, tôi không thay đổi -->
+
 <div class="login-overlay" id="loginOverlay">
     <div class="login-box">
         <div class="lock-icon">🔐</div>
@@ -1269,6 +1271,9 @@
     const ADMIN_EMAIL = 'ptquynhnhi05121999@gmail.com';
     const ADMIN_PASSWORD = 'admin123';
 
+    // ⭐ QUAN TRỌNG: Đường dẫn riêng cho app quản lý học tập
+    const CLASS_PATH = 'classData/quynh_nhi_class';
+
     let students = [];
     let currentStudentId = null;
     let importedFileName = '';
@@ -1280,8 +1285,7 @@
     let syncInterval = null;
     let isFirebaseListenerActive = false;
 
-    // Month navigation state
-    let currentChartMonth = null; // null means show all months
+    let currentChartMonth = null;
     let currentComparisonMonth = null;
 
     function showToast(message, type = 'success') {
@@ -1330,24 +1334,29 @@
         el.textContent = `${icons[status] || '☁️'} ${texts[status] || 'Đồng bộ'}${message ? ' ' + message : ''}`;
     }
 
+    // ============ CÁC HÀM FIREBASE SỬA LẠI ============
+
     function syncToFirebase() {
         if (!isAdmin) return;
         if (isSyncing) return;
         isSyncing = true;
         updateSyncStatus('syncing');
 
-        const updates = {};
+        const saveData = {};
         students.forEach((student) => {
             if (student.id) {
-                updates[`students/${student.id}`] = student;
+                saveData[student.id] = student;
             }
         });
-        updates['updatedAt'] = firebase.database.ServerValue.TIMESTAMP;
 
-        db.ref('classData').update(updates)
+        db.ref(`${CLASS_PATH}/students`).set(saveData)
+            .then(() => {
+                return db.ref(`${CLASS_PATH}/updatedAt`).set(firebase.database.ServerValue.TIMESTAMP);
+            })
             .then(() => {
                 isSyncing = false;
                 updateSyncStatus('synced');
+                showToast('✅ Đã đồng bộ dữ liệu lên Firebase');
             })
             .catch((error) => {
                 isSyncing = false;
@@ -1358,7 +1367,7 @@
 
     function loadFromFirebase() {
         updateSyncStatus('syncing');
-        db.ref('classData/students').once('value')
+        db.ref(`${CLASS_PATH}/students`).once('value')
             .then((snapshot) => {
                 const data = snapshot.val();
                 if (data) {
@@ -1394,6 +1403,7 @@
                 }
             })
             .catch((error) => {
+                console.error('Lỗi load Firebase:', error);
                 updateSyncStatus('error', error.message);
                 showToast('❌ Lỗi tải dữ liệu: ' + error.message, 'error');
             });
@@ -1409,7 +1419,7 @@
 
         if (!isFirebaseListenerActive) {
             isFirebaseListenerActive = true;
-            db.ref('classData/students').on('value', (snapshot) => {
+            db.ref(`${CLASS_PATH}/students`).on('value', (snapshot) => {
                 const data = snapshot.val();
                 if (data && !isAdminMode) {
                     const loadedStudents = Object.values(data);
@@ -1430,6 +1440,8 @@
             });
         }
     }
+
+    // ============ CÁC HÀM QUẢN LÝ KHÁC ============
 
     function getUrlParam(p) {
         return new URLSearchParams(window.location.search).get(p);
@@ -1545,6 +1557,8 @@
         event.target.value = '';
     }
 
+    // ============ HÀM IMPORT ĐÃ SỬA ============
+
     function importFile(file) {
         if (!isAdmin) {
             showToast('❌ Vui lòng đăng nhập Admin', 'error');
@@ -1559,7 +1573,6 @@
                     if (!s.id || !s.name) throw new Error(`Học sinh #${i+1} thiếu id hoặc name`);
                 });
                 
-                // Cập nhật biến local
                 students = data;
                 importedFileName = file.name;
                 
@@ -1574,29 +1587,27 @@
                 document.getElementById('fileSize').textContent = `(${(file.size/1024).toFixed(1)} KB)`;
                 document.getElementById('importArea').classList.add('has-data');
                 
-                // ⭐ QUAN TRỌNG: Lưu ngay vào Firebase và chờ kết quả
                 showToast('⏳ Đang lưu dữ liệu vào Firebase...', 'info');
                 updateSyncStatus('syncing', 'Đang lưu...');
                 
-                // Xóa dữ liệu cũ trước khi lưu mới
-                db.ref('classData/students').remove()
+                const saveData = {};
+                data.forEach((student) => {
+                    if (student.id) {
+                        saveData[student.id] = student;
+                    }
+                });
+                
+                db.ref(`${CLASS_PATH}/students`).set(saveData)
                     .then(() => {
-                        // Lưu từng học sinh
-                        const updates = {};
-                        students.forEach((student) => {
-                            if (student.id) {
-                                updates[`students/${student.id}`] = student;
-                            }
-                        });
-                        updates['updatedAt'] = firebase.database.ServerValue.TIMESTAMP;
-                        
-                        return db.ref('classData').update(updates);
+                        return db.ref(`${CLASS_PATH}/updatedAt`).set(firebase.database.ServerValue.TIMESTAMP);
                     })
                     .then(() => {
                         showToast(`✅ Import ${students.length} học sinh thành công và đã lưu lên Firebase`);
                         updateSyncStatus('synced', `(${students.length} học sinh)`);
+                        loadFromFirebase();
                     })
                     .catch((error) => {
+                        console.error('Lỗi Firebase:', error);
                         showToast(`❌ Lỗi lưu lên Firebase: ${error.message}`, 'error');
                         updateSyncStatus('error', error.message);
                     });
@@ -1621,6 +1632,8 @@
         else showToast('❌ Vui lòng chọn file .json', 'error');
     });
     dz.addEventListener('click', () => document.getElementById('fileInput').click());
+
+    // ============ CÁC HÀM CÒN LẠI GIỮ NGUYÊN NHƯNG SỬA PATH ============
 
     function renderAll() {
         renderStats();
@@ -1668,11 +1681,10 @@
             currentStudentId = students.length > 0 ? students[0].id : null;
         }
         
-        db.ref(`classData/students/${id}`).remove()
+        db.ref(`${CLASS_PATH}/students/${id}`).remove()
             .then(() => {
                 renderAll();
                 showToast(`✅ Đã xóa học sinh "${student.name}"`);
-                syncToFirebase();
             })
             .catch((error) => {
                 showToast('❌ Lỗi xóa trên Firebase: ' + error.message, 'error');
@@ -1839,7 +1851,10 @@
         document.getElementById('importArea').classList.remove('has-data');
         renderAll();
         
-        db.ref('classData/students').remove()
+        db.ref(`${CLASS_PATH}/students`).remove()
+            .then(() => {
+                return db.ref(`${CLASS_PATH}/updatedAt`).remove();
+            })
             .then(() => {
                 showToast('🗑️ Đã xóa toàn bộ dữ liệu');
                 updateSyncStatus('synced', '(trống)');
@@ -1861,6 +1876,8 @@
         showToast('✅ Đã xuất dữ liệu');
     }
 
+    // ============ CÁC HÀM HIỂN THỊ ============
+
     function populateStudentSelect() {
         const select = document.getElementById('studentSelect');
         const current = select.value;
@@ -1875,7 +1892,6 @@
     function populateMonthSelects() {
         const months = getAllMonths();
         
-        // Chart month select
         const chartSelect = document.getElementById('chartMonthSelect');
         const chartCurrent = chartSelect.value;
         chartSelect.innerHTML = '<option value="all">Tất cả tháng</option>';
@@ -1889,7 +1905,6 @@
             chartSelect.value = currentChartMonth.toString();
         }
 
-        // Comparison month select
         const compSelect = document.getElementById('comparisonMonthSelect');
         const compCurrent = compSelect.value;
         compSelect.innerHTML = '<option value="all">Tất cả tháng</option>';
@@ -2107,7 +2122,6 @@
             return;
         }
 
-        // Filter by selected month
         const select = document.getElementById('chartMonthSelect');
         const selectedMonth = select.value;
         if (selectedMonth !== 'all') {
@@ -2221,7 +2235,6 @@
             return;
         }
 
-        // Get selected month filter
         const select = document.getElementById('comparisonMonthSelect');
         const selectedMonth = select.value;
         let filterMonth = null;
@@ -2232,7 +2245,6 @@
             currentComparisonMonth = null;
         }
 
-        // Get all months from all students (filtered if needed)
         const allMonths = new Set();
         const allStudents = [student, ...compareStudents];
         allStudents.forEach(s => {
@@ -2264,7 +2276,6 @@
         }
 
         const labels = sortedMonths.map(m => getMonthName(m));
-
         const colors = ['#2d6a4f', '#e74c3c', '#3498db', '#f39c12', '#9b59b6', '#1abc9c', '#e67e22', '#2ecc71'];
 
         const datasets = allStudents.map((s, index) => {
@@ -2320,26 +2331,8 @@
     }
 
     function clearDefaultData() {
-        db.ref('classData/students').once('value')
-            .then((snapshot) => {
-                const data = snapshot.val();
-                if (data) {
-                    const studentsList = Object.values(data);
-                    const hasSampleData = studentsList.some(s => 
-                        s.name === 'Sandy' || s.name === 'Bo' || s.name === 'Sandy2'
-                    );
-                    if (hasSampleData) {
-                        db.ref('classData/students').remove()
-                            .then(() => {
-                                console.log('Đã xóa dữ liệu mẫu');
-                                students = [];
-                                currentStudentId = null;
-                                renderAll();
-                                updateSyncStatus('synced', '(trống)');
-                            });
-                    }
-                }
-            });
+        // Không xóa dữ liệu mặc định nữa để tránh mất dữ liệu cũ
+        console.log('App quản lý học tập khởi động với path:', CLASS_PATH);
     }
 
     function init() {
