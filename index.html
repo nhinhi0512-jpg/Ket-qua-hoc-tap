@@ -108,13 +108,9 @@
             background: #229954;
         }
 
-        .btn-warning {
-            background: #f39c12;
-            color: white;
-        }
-
-        .btn-warning:hover {
-            background: #d68910;
+        .btn-sm {
+            padding: 4px 12px;
+            font-size: 0.75rem;
         }
 
         .mode-badge {
@@ -409,6 +405,16 @@
             font-weight: 600;
         }
 
+        .student-item .actions {
+            display: flex;
+            gap: 6px;
+        }
+
+        .student-item .actions .btn {
+            padding: 2px 10px;
+            font-size: 0.7rem;
+        }
+
         .empty-state {
             text-align: center;
             padding: 30px 20px;
@@ -547,21 +553,6 @@
         }
 
         .score-table td input:focus {
-            border-color: #52b788;
-            outline: none;
-        }
-
-        .score-table td select {
-            width: 100%;
-            padding: 4px 8px;
-            border: 2px solid #d8eddd;
-            border-radius: 6px;
-            font-size: 0.85rem;
-            font-family: inherit;
-            background: white;
-        }
-
-        .score-table td select:focus {
             border-color: #52b788;
             outline: none;
         }
@@ -874,11 +865,6 @@
             display: block !important;
         }
 
-        .disabled-input {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
-
         .sync-status {
             display: inline-flex;
             align-items: center;
@@ -910,23 +896,20 @@
             50% { opacity: 0.5; }
         }
 
-        .score-edit-row td {
-            padding: 4px 8px;
-        }
-
-        .score-edit-row input, .score-edit-row select {
-            width: 100%;
-            padding: 4px 8px;
-            border: 2px solid #d8eddd;
+        .student-item .delete-btn {
+            background: #e74c3c;
+            color: white;
+            border: none;
             border-radius: 6px;
-            font-size: 0.85rem;
-            font-family: inherit;
-            background: white;
+            padding: 2px 10px;
+            font-size: 0.7rem;
+            cursor: pointer;
+            transition: all 0.2s;
         }
 
-        .score-edit-row input:focus, .score-edit-row select:focus {
-            border-color: #52b788;
-            outline: none;
+        .student-item .delete-btn:hover {
+            background: #c0392b;
+            transform: scale(1.05);
         }
     </style>
 </head>
@@ -1159,6 +1142,7 @@
     let chartInstance = null;
     let comparisonChartInstance = null;
     let isSyncing = false;
+    let syncInterval = null;
 
     function showToast(message, type = 'success') {
         document.querySelectorAll('.toast').forEach(el => el.remove());
@@ -1186,13 +1170,6 @@
         return nums.reduce((a,b) => a + b.score, 0) / nums.length;
     }
 
-    function getStudentAvgByMonth(student, month) {
-        if (!student.scores) return null;
-        const scores = student.scores.filter(sc => sc.month === month);
-        if (scores.length === 0) return null;
-        return scores.reduce((a,b) => a + b.score, 0) / scores.length;
-    }
-
     function updateSyncStatus(status, message = '') {
         const el = document.getElementById('syncStatus');
         el.className = `sync-status ${status}`;
@@ -1213,7 +1190,6 @@
             .then(() => {
                 isSyncing = false;
                 updateSyncStatus('synced');
-                showToast('✅ Đã đồng bộ dữ liệu lên Firebase');
             })
             .catch((error) => {
                 isSyncing = false;
@@ -1239,16 +1215,41 @@
                     }
                     renderAll();
                     updateSyncStatus('synced');
-                    showToast(`✅ Đã tải ${students.length} học sinh từ Firebase`);
                 } else {
                     updateSyncStatus('synced', '(chưa có dữ liệu)');
-                    showToast('ℹ️ Chưa có dữ liệu trên Firebase', 'error');
                 }
             })
             .catch((error) => {
                 updateSyncStatus('error', error.message);
                 showToast('❌ Lỗi tải dữ liệu: ' + error.message, 'error');
             });
+    }
+
+    // Auto sync listener - real-time updates
+    function startAutoSync() {
+        if (syncInterval) clearInterval(syncInterval);
+        // Auto sync every 30 seconds
+        syncInterval = setInterval(() => {
+            if (isAdmin && students.length > 0) {
+                syncToFirebase();
+            }
+        }, 30000);
+
+        // Listen for real-time changes from Firebase
+        db.ref('classData').on('value', (snapshot) => {
+            const data = snapshot.val();
+            if (data && data.students) {
+                // Only update if data changed and not in admin mode (to avoid loops)
+                if (!isAdminMode) {
+                    students = data.students;
+                    if (students.length > 0 && !currentStudentId) {
+                        currentStudentId = students[0].id;
+                    }
+                    renderAll();
+                    updateSyncStatus('synced', '(tự động)');
+                }
+            }
+        });
     }
 
     function getUrlParam(p) {
@@ -1269,6 +1270,7 @@
             enableAdminMode();
             showToast('✅ Đăng nhập Admin thành công!');
             loadFromFirebase();
+            startAutoSync();
         } else {
             err.classList.add('show');
             showToast('❌ Email hoặc mật khẩu không đúng!', 'error');
@@ -1279,9 +1281,16 @@
         isAdmin = false;
         isAdminMode = false;
         sessionStorage.removeItem('isAdmin');
+        if (syncInterval) {
+            clearInterval(syncInterval);
+            syncInterval = null;
+        }
+        db.ref('classData').off();
         disableAdminMode();
         updateUI();
         showToast('👋 Đã đăng xuất');
+        // Still listen for updates in view mode
+        startAutoSync();
     }
 
     function toggleAdminMode() {
@@ -1295,6 +1304,7 @@
                 updateUI();
                 showToast('✅ Đã khôi phục phiên Admin');
                 loadFromFirebase();
+                startAutoSync();
                 return;
             }
             document.getElementById('loginOverlay').classList.add('show');
@@ -1312,11 +1322,12 @@
         document.getElementById('detailNote').disabled = false;
         isAdminMode = true;
         updateUI();
-        // Show action column in score table
         document.querySelectorAll('.score-table th:last-child, .score-table td:last-child').forEach(el => {
             el.style.display = '';
         });
         renderDetailById(currentStudentId);
+        // Re-render student list with delete buttons
+        renderStudentList();
     }
 
     function disableAdminMode() {
@@ -1331,6 +1342,7 @@
             el.style.display = 'none';
         });
         renderDetailById(currentStudentId);
+        renderStudentList();
     }
 
     function updateUI() {
@@ -1431,6 +1443,24 @@
         document.getElementById('totalAbsences').textContent = abs;
     }
 
+    function deleteStudent(id) {
+        if (!isAdmin) {
+            showToast('❌ Cần quyền Admin', 'error');
+            return;
+        }
+        const student = students.find(s => s.id === id);
+        if (!student) return;
+        if (!confirm(`Xóa học sinh "${student.name}"?`)) return;
+        
+        students = students.filter(s => s.id !== id);
+        if (currentStudentId === id) {
+            currentStudentId = students.length > 0 ? students[0].id : null;
+        }
+        renderAll();
+        syncToFirebase();
+        showToast(`✅ Đã xóa học sinh "${student.name}"`);
+    }
+
     function renderStudentList() {
         const container = document.getElementById('studentList');
         if (students.length === 0) {
@@ -1442,10 +1472,15 @@
         students.forEach(s => {
             const avg = getStudentAvg(s);
             const active = s.id === currentStudentId ? 'active' : '';
+            const deleteBtn = isAdminMode ? 
+                `<button class="delete-btn" onclick="event.stopPropagation(); deleteStudent('${s.id}')">🗑️</button>` : '';
             html += `
                 <div class="student-item ${active}" onclick="selectStudent('${s.id}')">
                     <span class="name">${s.name}</span>
-                    <span class="avg">${avg.toFixed(1)}</span>
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <span class="avg">${avg.toFixed(1)}</span>
+                        ${deleteBtn}
+                    </div>
                 </div>
             `;
         });
@@ -1479,7 +1514,6 @@
         document.getElementById('detailAbsences').value = student.absences || 0;
         document.getElementById('detailNote').value = student.note || '';
 
-        // Score table with edit capability
         const tbody = document.getElementById('scoreBody');
         const nums = student.scores || [];
         
@@ -1782,7 +1816,6 @@
             return;
         }
 
-        // Get all months from all students
         const allMonths = new Set();
         const allStudents = [student, ...compareStudents];
         allStudents.forEach(s => {
@@ -1858,6 +1891,12 @@
             isAdminMode = true;
             enableAdminMode();
             loadFromFirebase();
+            startAutoSync();
+        } else {
+            // Still listen for updates in view mode
+            startAutoSync();
+            // Load data from Firebase for view mode
+            loadFromFirebase();
         }
 
         const mode = getUrlParam('mode');
@@ -1883,7 +1922,6 @@
             }
         });
 
-        // Hide action column initially
         document.querySelectorAll('.score-table th:last-child, .score-table td:last-child').forEach(el => {
             el.style.display = 'none';
         });
