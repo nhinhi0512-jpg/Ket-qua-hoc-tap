@@ -1175,6 +1175,7 @@
     let comparisonChartInstance = null;
     let isSyncing = false;
     let syncInterval = null;
+    let isFirebaseListenerActive = false;
 
     function showToast(message, type = 'success') {
         document.querySelectorAll('.toast').forEach(el => el.remove());
@@ -1216,9 +1217,15 @@
         isSyncing = true;
         updateSyncStatus('syncing');
 
-        const data = { students: students, updatedAt: firebase.database.ServerValue.TIMESTAMP };
+        // Lưu từng học sinh riêng biệt để tránh ghi đè
+        const updates = {};
+        students.forEach((student, index) => {
+            updates[`students/${student.id}`] = student;
+        });
+        // Thêm timestamp
+        updates['updatedAt'] = firebase.database.ServerValue.TIMESTAMP;
 
-        db.ref('classData').set(data)
+        db.ref('classData').update(updates)
             .then(() => {
                 isSyncing = false;
                 updateSyncStatus('synced');
@@ -1232,21 +1239,29 @@
 
     function loadFromFirebase() {
         updateSyncStatus('syncing');
-        db.ref('classData').once('value')
+        db.ref('classData/students').once('value')
             .then((snapshot) => {
                 const data = snapshot.val();
-                if (data && data.students) {
-                    students = data.students;
-                    importedFileName = 'firebase_data.json';
-                    document.getElementById('fileInfo').classList.add('show');
-                    document.getElementById('fileName').textContent = 'firebase_data.json';
-                    document.getElementById('fileSize').textContent = `(Đồng bộ từ cloud)`;
-                    document.getElementById('importArea').classList.add('has-data');
-                    if (students.length > 0 && !currentStudentId) {
-                        currentStudentId = students[0].id;
+                if (data) {
+                    // Convert object to array
+                    const loadedStudents = Object.values(data);
+                    if (loadedStudents.length > 0) {
+                        students = loadedStudents;
+                        importedFileName = 'firebase_data.json';
+                        document.getElementById('fileInfo').classList.add('show');
+                        document.getElementById('fileName').textContent = 'firebase_data.json';
+                        document.getElementById('fileSize').textContent = `(Đồng bộ từ cloud)`;
+                        document.getElementById('importArea').classList.add('has-data');
+                        if (students.length > 0 && !currentStudentId) {
+                            currentStudentId = students[0].id;
+                        }
+                        renderAll();
+                        updateSyncStatus('synced');
+                        showToast(`✅ Đã tải ${students.length} học sinh từ Firebase`);
+                    } else {
+                        updateSyncStatus('synced', '(chưa có dữ liệu)');
+                        showToast('ℹ️ Chưa có dữ liệu trên Firebase', 'info');
                     }
-                    renderAll();
-                    updateSyncStatus('synced');
                 } else {
                     updateSyncStatus('synced', '(chưa có dữ liệu)');
                 }
@@ -1259,25 +1274,31 @@
 
     function startAutoSync() {
         if (syncInterval) clearInterval(syncInterval);
+        // Auto sync every 30 seconds
         syncInterval = setInterval(() => {
             if (isAdmin && students.length > 0) {
                 syncToFirebase();
             }
         }, 30000);
 
-        db.ref('classData').on('value', (snapshot) => {
-            const data = snapshot.val();
-            if (data && data.students) {
-                if (!isAdminMode) {
-                    students = data.students;
-                    if (students.length > 0 && !currentStudentId) {
-                        currentStudentId = students[0].id;
+        // Listen for real-time changes - chỉ lắng nghe khi không ở chế độ admin
+        if (!isFirebaseListenerActive) {
+            isFirebaseListenerActive = true;
+            db.ref('classData/students').on('value', (snapshot) => {
+                const data = snapshot.val();
+                if (data && !isAdminMode) {
+                    const loadedStudents = Object.values(data);
+                    if (loadedStudents.length > 0) {
+                        students = loadedStudents;
+                        if (students.length > 0 && !currentStudentId) {
+                            currentStudentId = students[0].id;
+                        }
+                        renderAll();
+                        updateSyncStatus('synced', '(tự động)');
                     }
-                    renderAll();
-                    updateSyncStatus('synced', '(tự động)');
                 }
-            }
-        });
+            });
+        }
     }
 
     function getUrlParam(p) {
@@ -1313,11 +1334,12 @@
             clearInterval(syncInterval);
             syncInterval = null;
         }
-        db.ref('classData').off();
+        // Không tắt listener, vẫn lắng nghe ở chế độ xem
         disableAdminMode();
         updateUI();
         showToast('👋 Đã đăng xuất');
-        startAutoSync();
+        // Reload data để hiển thị chế độ xem
+        loadFromFirebase();
     }
 
     function toggleAdminMode() {
@@ -1645,8 +1667,14 @@
         document.getElementById('fileInfo').classList.remove('show');
         document.getElementById('importArea').classList.remove('has-data');
         renderAll();
-        syncToFirebase();
-        showToast('🗑️ Đã xóa dữ liệu');
+        // Xóa trên Firebase
+        db.ref('classData/students').remove()
+            .then(() => {
+                showToast('🗑️ Đã xóa dữ liệu');
+            })
+            .catch((error) => {
+                showToast('❌ Lỗi xóa Firebase: ' + error.message, 'error');
+            });
     }
 
     function exportData() {
@@ -1697,7 +1725,6 @@
 
     function toggleCompareStudent(id, checked) {
         sessionStorage.setItem(`compare_${id}`, checked.toString());
-        // Update label style
         const labels = document.querySelectorAll('#compareCheckboxes label');
         labels.forEach(label => {
             const input = label.querySelector('input');
@@ -1878,7 +1905,6 @@
             return;
         }
 
-        // Get checked students
         const checkedBoxes = document.querySelectorAll('#compareCheckboxes input[type="checkbox"]:checked');
         const compareStudents = students.filter(s => {
             for (let cb of checkedBoxes) {
@@ -1903,7 +1929,6 @@
             return;
         }
 
-        // Get all months
         const allMonths = new Set();
         const allStudents = [student, ...compareStudents];
         allStudents.forEach(s => {
