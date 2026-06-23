@@ -618,6 +618,49 @@
             color: #2d6a4f;
             font-size: 1.1rem;
             margin-bottom: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .student-view .chart-container .chart-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .student-view .chart-container .chart-controls button {
+            padding: 4px 12px;
+            border: 2px solid #d8eddd;
+            border-radius: 8px;
+            background: white;
+            color: #2d6a4f;
+            font-weight: 600;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .student-view .chart-container .chart-controls button:hover {
+            background: #e8f5ee;
+            border-color: #52b788;
+        }
+
+        .student-view .chart-container .chart-controls select {
+            padding: 4px 12px;
+            border: 2px solid #d8eddd;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-family: inherit;
+            background: white;
+            cursor: pointer;
+        }
+
+        .student-view .chart-container .chart-controls select:focus {
+            border-color: #52b788;
+            outline: none;
         }
 
         .student-view .chart-wrapper {
@@ -827,6 +870,49 @@
             color: #2d6a4f;
             font-size: 1.1rem;
             margin-bottom: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .comparison-chart-container .chart-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .comparison-chart-container .chart-controls button {
+            padding: 4px 12px;
+            border: 2px solid #d8eddd;
+            border-radius: 8px;
+            background: white;
+            color: #2d6a4f;
+            font-weight: 600;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .comparison-chart-container .chart-controls button:hover {
+            background: #e8f5ee;
+            border-color: #52b788;
+        }
+
+        .comparison-chart-container .chart-controls select {
+            padding: 4px 12px;
+            border: 2px solid #d8eddd;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-family: inherit;
+            background: white;
+            cursor: pointer;
+        }
+
+        .comparison-chart-container .chart-controls select:focus {
+            border-color: #52b788;
+            outline: none;
         }
 
         .comparison-chart-wrapper {
@@ -875,6 +961,8 @@
             .student-view .student-selector select { max-width: 100%; }
             .comparison-controls { flex-direction: column; align-items: stretch; }
             .comparison-controls .student-checkboxes { max-height: 120px; overflow-y: auto; }
+            .student-view .chart-container h3 { flex-direction: column; align-items: stretch; }
+            .comparison-chart-container h3 { flex-direction: column; align-items: stretch; }
         }
 
         .hidden {
@@ -1117,14 +1205,28 @@
         </div>
 
         <div class="comparison-chart-container">
-            <h3>📈 Biểu đồ so sánh điểm theo tháng</h3>
+            <h3>
+                <span>📈 Biểu đồ so sánh điểm theo tháng</span>
+                <div class="chart-controls">
+                    <button onclick="changeComparisonMonth(-1)">◀</button>
+                    <select id="comparisonMonthSelect" onchange="updateComparisonChart()"></select>
+                    <button onclick="changeComparisonMonth(1)">▶</button>
+                </div>
+            </h3>
             <div class="comparison-chart-wrapper">
                 <canvas id="comparisonChart"></canvas>
             </div>
         </div>
 
         <div class="chart-container">
-            <h3>📈 Biểu đồ điểm theo tháng</h3>
+            <h3>
+                <span>📈 Biểu đồ điểm theo tháng</span>
+                <div class="chart-controls">
+                    <button onclick="changeChartMonth(-1)">◀</button>
+                    <select id="chartMonthSelect" onchange="updateChart()"></select>
+                    <button onclick="changeChartMonth(1)">▶</button>
+                </div>
+            </h3>
             <div class="chart-wrapper">
                 <canvas id="scoreChart"></canvas>
             </div>
@@ -1177,6 +1279,10 @@
     let syncInterval = null;
     let isFirebaseListenerActive = false;
 
+    // Month navigation state
+    let currentChartMonth = null; // null means show all months
+    let currentComparisonMonth = null;
+
     function showToast(message, type = 'success') {
         document.querySelectorAll('.toast').forEach(el => el.remove());
         const toast = document.createElement('div');
@@ -1190,6 +1296,18 @@
         const names = ['Tháng 1','Tháng 2','Tháng 3','Tháng 4','Tháng 5','Tháng 6',
                        'Tháng 7','Tháng 8','Tháng 9','Tháng 10','Tháng 11','Tháng 12'];
         return names[m-1] || `Tháng ${m}`;
+    }
+
+    function getAllMonths() {
+        const months = new Set();
+        students.forEach(s => {
+            if (s.scores) {
+                s.scores.forEach(sc => {
+                    if (sc.month) months.add(sc.month);
+                });
+            }
+        });
+        return Array.from(months).sort((a,b) => a - b);
     }
 
     function getNumericScores(student) {
@@ -1442,15 +1560,12 @@
                 students = data;
                 importedFileName = file.name;
                 
-                // Set current student to first one
                 if (students.length > 0) {
                     currentStudentId = students[0].id;
                 }
                 
-                // Update UI immediately
                 renderAll();
                 
-                // Update file info
                 document.getElementById('fileInfo').classList.add('show');
                 document.getElementById('fileName').textContent = file.name;
                 document.getElementById('fileSize').textContent = `(${(file.size/1024).toFixed(1)} KB)`;
@@ -1458,7 +1573,6 @@
                 
                 showToast(`✅ Import ${students.length} học sinh thành công`);
                 
-                // Sync to Firebase
                 syncToFirebase();
             } catch (error) {
                 showToast(`❌ Lỗi: ${error.message}`, 'error');
@@ -1488,6 +1602,7 @@
         renderStudentView();
         populateStudentSelect();
         populateCompareCheckboxes();
+        populateMonthSelects();
     }
 
     function renderStats() {
@@ -1730,6 +1845,80 @@
         else if (currentStudentId) select.value = currentStudentId;
     }
 
+    function populateMonthSelects() {
+        const months = getAllMonths();
+        
+        // Chart month select
+        const chartSelect = document.getElementById('chartMonthSelect');
+        const chartCurrent = chartSelect.value;
+        chartSelect.innerHTML = '<option value="all">Tất cả tháng</option>';
+        months.forEach(m => {
+            const selected = (chartCurrent === m.toString() || (!chartCurrent && currentChartMonth === m)) ? 'selected' : '';
+            chartSelect.innerHTML += `<option value="${m}" ${selected}>${getMonthName(m)}</option>`;
+        });
+        if (chartCurrent) {
+            chartSelect.value = chartCurrent;
+        } else if (currentChartMonth !== null && months.includes(currentChartMonth)) {
+            chartSelect.value = currentChartMonth.toString();
+        }
+
+        // Comparison month select
+        const compSelect = document.getElementById('comparisonMonthSelect');
+        const compCurrent = compSelect.value;
+        compSelect.innerHTML = '<option value="all">Tất cả tháng</option>';
+        months.forEach(m => {
+            const selected = (compCurrent === m.toString() || (!compCurrent && currentComparisonMonth === m)) ? 'selected' : '';
+            compSelect.innerHTML += `<option value="${m}" ${selected}>${getMonthName(m)}</option>`;
+        });
+        if (compCurrent) {
+            compSelect.value = compCurrent;
+        } else if (currentComparisonMonth !== null && months.includes(currentComparisonMonth)) {
+            compSelect.value = currentComparisonMonth.toString();
+        }
+    }
+
+    function changeChartMonth(delta) {
+        const months = getAllMonths();
+        if (months.length === 0) return;
+        
+        let current = currentChartMonth;
+        if (current === null) {
+            current = months[0];
+        } else {
+            const idx = months.indexOf(current);
+            if (idx === -1) {
+                current = months[0];
+            } else {
+                const newIdx = Math.max(0, Math.min(months.length - 1, idx + delta));
+                current = months[newIdx];
+            }
+        }
+        currentChartMonth = current;
+        document.getElementById('chartMonthSelect').value = current.toString();
+        updateChart();
+    }
+
+    function changeComparisonMonth(delta) {
+        const months = getAllMonths();
+        if (months.length === 0) return;
+        
+        let current = currentComparisonMonth;
+        if (current === null) {
+            current = months[0];
+        } else {
+            const idx = months.indexOf(current);
+            if (idx === -1) {
+                current = months[0];
+            } else {
+                const newIdx = Math.max(0, Math.min(months.length - 1, idx + delta));
+                current = months[newIdx];
+            }
+        }
+        currentComparisonMonth = current;
+        document.getElementById('comparisonMonthSelect').value = current.toString();
+        updateComparisonChart();
+    }
+
     function populateCompareCheckboxes() {
         const container = document.getElementById('compareCheckboxes');
         if (students.length <= 1) {
@@ -1847,16 +2036,34 @@
             noteBox.style.display = 'none';
         }
 
-        renderChart(student);
+        populateMonthSelects();
+        updateChart();
         populateCompareCheckboxes();
         updateComparisonChart();
     }
 
-    function renderChart(student) {
+    function updateChart() {
         const ctx = document.getElementById('scoreChart').getContext('2d');
         if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
 
-        const nums = getNumericScores(student);
+        const student = students.find(s => s.id === currentStudentId);
+        if (!student) {
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: { labels: ['Chưa có dữ liệu'], datasets: [{ label: 'Điểm', data: [0], borderColor: '#52b788' }] },
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false, 
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { min: 0, max: 10, ticks: { stepSize: 1 } }
+                    }
+                }
+            });
+            return;
+        }
+
+        let nums = getNumericScores(student);
         if (nums.length === 0) {
             chartInstance = new Chart(ctx, {
                 type: 'line',
@@ -1873,8 +2080,35 @@
             return;
         }
 
+        // Filter by selected month
+        const select = document.getElementById('chartMonthSelect');
+        const selectedMonth = select.value;
+        if (selectedMonth !== 'all') {
+            const month = parseInt(selectedMonth);
+            nums = nums.filter(sc => sc.month === month);
+            currentChartMonth = month;
+        } else {
+            currentChartMonth = null;
+        }
+
+        if (nums.length === 0) {
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: { labels: ['Không có dữ liệu tháng này'], datasets: [{ label: 'Điểm', data: [0], borderColor: '#52b788' }] },
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false, 
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { min: 0, max: 10, ticks: { stepSize: 1 } }
+                    }
+                }
+            });
+            return;
+        }
+
         const sorted = [...nums].sort((a,b) => a.month - b.month);
-        const labels = sorted.map(s => `${getMonthName(s.month)}`);
+        const labels = sorted.map(s => `${getMonthName(s.month)}${s.testName ? ' - ' + s.testName : ''}`);
         const data = sorted.map(s => s.score);
 
         chartInstance = new Chart(ctx, {
@@ -1960,17 +2194,48 @@
             return;
         }
 
+        // Get selected month filter
+        const select = document.getElementById('comparisonMonthSelect');
+        const selectedMonth = select.value;
+        let filterMonth = null;
+        if (selectedMonth !== 'all') {
+            filterMonth = parseInt(selectedMonth);
+            currentComparisonMonth = filterMonth;
+        } else {
+            currentComparisonMonth = null;
+        }
+
+        // Get all months from all students (filtered if needed)
         const allMonths = new Set();
         const allStudents = [student, ...compareStudents];
         allStudents.forEach(s => {
             if (s.scores) {
                 s.scores.forEach(sc => {
-                    if (sc.month) allMonths.add(sc.month);
+                    if (sc.month && (filterMonth === null || sc.month === filterMonth)) {
+                        allMonths.add(sc.month);
+                    }
                 });
             }
         });
 
         const sortedMonths = Array.from(allMonths).sort((a,b) => a - b);
+        
+        if (sortedMonths.length === 0) {
+            comparisonChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: { labels: ['Không có dữ liệu'], datasets: [{ label: 'Điểm', data: [0], borderColor: '#52b788' }] },
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false, 
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { min: 0, max: 10, ticks: { stepSize: 1 } }
+                    }
+                }
+            });
+            return;
+        }
+
         const labels = sortedMonths.map(m => getMonthName(m));
 
         const colors = ['#2d6a4f', '#e74c3c', '#3498db', '#f39c12', '#9b59b6', '#1abc9c', '#e67e22', '#2ecc71'];
