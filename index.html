@@ -8,6 +8,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
     <style>
+        /* ... phần CSS giữ nguyên như bạn đã có ... */
         * {
             margin: 0;
             padding: 0;
@@ -1373,7 +1374,7 @@
                             currentStudentId = students[0].id;
                         }
                         renderAll();
-                        updateSyncStatus('synced');
+                        updateSyncStatus('synced', `(${students.length} học sinh)`);
                         showToast(`✅ Đã tải ${students.length} học sinh từ Firebase`);
                     } else {
                         students = [];
@@ -1557,6 +1558,8 @@
                 data.forEach((s, i) => {
                     if (!s.id || !s.name) throw new Error(`Học sinh #${i+1} thiếu id hoặc name`);
                 });
+                
+                // Cập nhật biến local
                 students = data;
                 importedFileName = file.name;
                 
@@ -1571,9 +1574,33 @@
                 document.getElementById('fileSize').textContent = `(${(file.size/1024).toFixed(1)} KB)`;
                 document.getElementById('importArea').classList.add('has-data');
                 
-                showToast(`✅ Import ${students.length} học sinh thành công`);
+                // ⭐ QUAN TRỌNG: Lưu ngay vào Firebase và chờ kết quả
+                showToast('⏳ Đang lưu dữ liệu vào Firebase...', 'info');
+                updateSyncStatus('syncing', 'Đang lưu...');
                 
-                syncToFirebase();
+                // Xóa dữ liệu cũ trước khi lưu mới
+                db.ref('classData/students').remove()
+                    .then(() => {
+                        // Lưu từng học sinh
+                        const updates = {};
+                        students.forEach((student) => {
+                            if (student.id) {
+                                updates[`students/${student.id}`] = student;
+                            }
+                        });
+                        updates['updatedAt'] = firebase.database.ServerValue.TIMESTAMP;
+                        
+                        return db.ref('classData').update(updates);
+                    })
+                    .then(() => {
+                        showToast(`✅ Import ${students.length} học sinh thành công và đã lưu lên Firebase`);
+                        updateSyncStatus('synced', `(${students.length} học sinh)`);
+                    })
+                    .catch((error) => {
+                        showToast(`❌ Lỗi lưu lên Firebase: ${error.message}`, 'error');
+                        updateSyncStatus('error', error.message);
+                    });
+                
             } catch (error) {
                 showToast(`❌ Lỗi: ${error.message}`, 'error');
             }
