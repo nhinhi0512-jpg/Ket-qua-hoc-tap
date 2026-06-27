@@ -1058,9 +1058,9 @@
             <div class="subtitle">Lớp Tiếng Anh cô Quỳnh Nhi</div>
         </div>
         <div class="header-right">
-            <span class="sync-status" id="syncStatus">☁️ Đồng bộ</span>
+            <span class="sync-status admin-only" id="syncStatus">☁️ Đồng bộ</span>
             <span class="mode-badge" id="modeBadge">👁️ Chế độ xem</span>
-            <button class="btn btn-white" onclick="toggleAdminMode()" id="modeToggleBtn">🔑 Đăng nhập Admin</button>
+            <button class="btn btn-white admin-only" onclick="toggleAdminMode()" id="modeToggleBtn">🔑 Đăng nhập Admin</button>
         </div>
     </div>
 
@@ -1146,7 +1146,7 @@
                     <div style="margin-top:8px;">
                         <div style="font-weight:600; color:#2d6a4f; margin-bottom:6px; font-size:0.9rem; display:flex; justify-content:space-between; align-items:center;">
                             <span>📝 Bảng điểm theo tháng</span>
-                            <button class="btn-add-score" onclick="addScoreRow()">+ Thêm điểm</button>
+                            <button class="btn-add-score admin-only-panel" onclick="addScoreRow()">+ Thêm điểm</button>
                         </div>
                         <div class="score-table-wrap">
                             <table class="score-table" id="scoreTable">
@@ -1284,6 +1284,9 @@
     let currentChartMonth = null;
     let currentComparisonMonth = null;
 
+    // Kiểm tra URL param mode=admin
+    const isAdminModeFromURL = new URLSearchParams(window.location.search).get('mode') === 'admin';
+
     function showToast(message, type = 'success') {
         document.querySelectorAll('.toast').forEach(el => el.remove());
         const toast = document.createElement('div');
@@ -1324,6 +1327,7 @@
 
     function updateSyncStatus(status, message = '') {
         const el = document.getElementById('syncStatus');
+        if (!el) return;
         el.className = `sync-status ${status}`;
         const icons = { synced: '✅', syncing: '🔄', error: '❌' };
         const texts = { synced: 'Đã đồng bộ', syncing: 'Đang đồng bộ...', error: 'Lỗi đồng bộ' };
@@ -1373,10 +1377,14 @@
                     if (loadedStudents.length > 0) {
                         students = loadedStudents;
                         importedFileName = 'firebase_data.json';
-                        document.getElementById('fileInfo').classList.add('show');
-                        document.getElementById('fileName').textContent = 'firebase_data.json';
-                        document.getElementById('fileSize').textContent = `(Đồng bộ từ cloud)`;
-                        document.getElementById('importArea').classList.add('has-data');
+                        const fileInfo = document.getElementById('fileInfo');
+                        if (fileInfo) {
+                            fileInfo.classList.add('show');
+                            document.getElementById('fileName').textContent = 'firebase_data.json';
+                            document.getElementById('fileSize').textContent = `(Đồng bộ từ cloud)`;
+                        }
+                        const importArea = document.getElementById('importArea');
+                        if (importArea) importArea.classList.add('has-data');
                         if (students.length > 0 && !currentStudentId) {
                             currentStudentId = students[0].id;
                         }
@@ -1386,16 +1394,20 @@
                     } else {
                         students = [];
                         currentStudentId = null;
-                        document.getElementById('fileInfo').classList.remove('show');
-                        document.getElementById('importArea').classList.remove('has-data');
+                        const fileInfo = document.getElementById('fileInfo');
+                        if (fileInfo) fileInfo.classList.remove('show');
+                        const importArea = document.getElementById('importArea');
+                        if (importArea) importArea.classList.remove('has-data');
                         renderAll();
                         updateSyncStatus('synced', '(chưa có dữ liệu)');
                     }
                 } else {
                     students = [];
                     currentStudentId = null;
-                    document.getElementById('fileInfo').classList.remove('show');
-                    document.getElementById('importArea').classList.remove('has-data');
+                    const fileInfo = document.getElementById('fileInfo');
+                    if (fileInfo) fileInfo.classList.remove('show');
+                    const importArea = document.getElementById('importArea');
+                    if (importArea) importArea.classList.remove('has-data');
                     renderAll();
                     updateSyncStatus('synced', '(chưa có dữ liệu)');
                 }
@@ -1646,18 +1658,20 @@
     }
 
     const dz = document.getElementById('dropZone');
-    ['dragenter','dragover'].forEach(ev => {
-        dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.add('dragover'); });
-    });
-    ['dragleave','drop'].forEach(ev => {
-        dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.remove('dragover'); });
-    });
-    dz.addEventListener('drop', e => {
-        const file = e.dataTransfer.files[0];
-        if (file && file.name.endsWith('.json')) importFile(file);
-        else showToast('❌ Vui lòng chọn file .json', 'error');
-    });
-    dz.addEventListener('click', () => document.getElementById('fileInput').click());
+    if (dz) {
+        ['dragenter','dragover'].forEach(ev => {
+            dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.add('dragover'); });
+        });
+        ['dragleave','drop'].forEach(ev => {
+            dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.remove('dragover'); });
+        });
+        dz.addEventListener('drop', e => {
+            const file = e.dataTransfer.files[0];
+            if (file && file.name.endsWith('.json')) importFile(file);
+            else showToast('❌ Vui lòng chọn file .json', 'error');
+        });
+        dz.addEventListener('click', () => document.getElementById('fileInput').click());
+    }
 
     // ============ CÁC HÀM HIỂN THỊ ============
 
@@ -1780,33 +1794,28 @@
             tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:#6b8c7e;">Chưa có điểm</td></tr>`;
         } else {
             let html = '';
-            const sortedScores = [...nums].sort((a,b) => {
-                if (a.month !== b.month) return a.month - b.month;
-                return (a.testName || '').localeCompare(b.testName || '');
-            });
-            
-            sortedScores.forEach((sc) => {
-                const realIndex = nums.indexOf(sc);
+            // KHÔNG sắp xếp nữa - giữ nguyên thứ tự như trong mảng
+            nums.forEach((sc, idx) => {
                 const cls = sc.score >= 8 ? 'score-high' : (sc.score < 5 ? 'score-low' : '');
                 const isAdmin = isAdminMode;
                 html += `<tr>
                     <td>
                         ${isAdmin ? `<input type="number" min="1" max="12" value="${sc.month}" 
-                            onchange="updateScore(${realIndex}, 'month', this.value)" 
+                            onchange="updateScore(${idx}, 'month', this.value)" 
                             style="width:80px;" step="1">` : getMonthName(sc.month)}
                     </td>
                     <td>
                         ${isAdmin ? `<input type="text" value="${sc.testName || 'Kiểm tra'}" 
-                            onchange="updateScore(${realIndex}, 'testName', this.value)" 
+                            onchange="updateScore(${idx}, 'testName', this.value)" 
                             style="min-width:120px;">` : (sc.testName || 'Kiểm tra')}
                     </td>
                     <td>
                         ${isAdmin ? `<input type="number" min="0" max="10" step="0.01" value="${sc.score}" 
-                            onchange="updateScore(${realIndex}, 'score', parseFloat(this.value))" 
+                            onchange="updateScore(${idx}, 'score', parseFloat(this.value))" 
                             style="width:80px;" class="${cls}">` : `<span class="${cls}">${sc.score}</span>`}
                     </td>
                     <td style="display:${isAdmin ? '' : 'none'}; text-align:center;">
-                        <button class="score-action-btn" style="background:#e74c3c; color:white; padding:4px 12px;" onclick="deleteScore(${realIndex})">🗑️ Xóa</button>
+                        <button class="score-action-btn" style="background:#e74c3c; color:white; padding:4px 12px;" onclick="deleteScore(${idx})">🗑️ Xóa</button>
                     </td>
                 </tr>`;
             });
@@ -1857,14 +1866,13 @@
             return;
         }
         
-        const deletedScore = student.scores[index];
         student.scores.splice(index, 1);
         renderAll();
         syncToFirebase(true);
-        showToast(`✅ Đã xóa điểm: ${deletedScore.testName || 'Kiểm tra'} (${deletedScore.score})`);
+        showToast('✅ Đã xóa điểm');
     }
 
-    // ============ HÀM THÊM ĐIỂM ============
+    // ============ HÀM THÊM ĐIỂM - THÊM VÀO CUỐI DANH SÁCH ============
 
     function addScoreRow() {
         if (!isAdmin) return;
@@ -1875,19 +1883,25 @@
         }
         if (!student.scores) student.scores = [];
         
-        let maxMonth = 1;
-        student.scores.forEach(sc => {
-            if (sc.month && sc.month > maxMonth) maxMonth = sc.month;
-        });
+        // Lấy tháng của điểm cuối cùng (nếu có)
+        let lastMonth = 1;
+        if (student.scores.length > 0) {
+            const lastScore = student.scores[student.scores.length - 1];
+            if (lastScore && lastScore.month) {
+                lastMonth = lastScore.month;
+            }
+        }
         
+        // Thêm vào CUỐI mảng
         student.scores.push({ 
-            month: maxMonth, 
-            testName: `Bài kiểm tra mới (${student.scores.length + 1})`, 
+            month: lastMonth, 
+            testName: `Bài kiểm tra mới (${student.scores.length})`, 
             score: 0 
         });
+        
         renderAll();
         syncToFirebase(true);
-        showToast('✅ Đã thêm dòng điểm mới');
+        showToast('✅ Đã thêm điểm mới vào cuối danh sách');
     }
 
     function updateAbsences() {
@@ -2127,7 +2141,8 @@
             listContainer.innerHTML = '<p style="color:#6b8c7e;text-align:center;padding:20px 0;">Chưa có bài kiểm tra nào</p>';
         } else {
             let html = '';
-            [...nums].sort((a,b) => a.month - b.month).forEach(sc => {
+            // Giữ nguyên thứ tự như trong mảng
+            nums.forEach(sc => {
                 const cls = sc.score >= 8 ? 'score-high' : (sc.score < 5 ? 'score-low' : '');
                 html += `
                     <div class="score-item">
@@ -2216,9 +2231,9 @@
             return;
         }
 
-        const sorted = [...nums].sort((a,b) => a.month - b.month);
-        const labels = sorted.map(s => `${getMonthName(s.month)}${s.testName ? ' - ' + s.testName : ''}`);
-        const data = sorted.map(s => s.score);
+        // Giữ nguyên thứ tự hiển thị
+        const labels = nums.map(s => `${getMonthName(s.month)}${s.testName ? ' - ' + s.testName : ''}`);
+        const data = nums.map(s => s.score);
 
         chartInstance = new Chart(ctx, {
             type: 'line',
@@ -2403,31 +2418,40 @@
     }
 
     function init() {
-        document.querySelector('.header-right').insertAdjacentHTML('afterbegin', `
-            <button class="btn btn-white" onclick="exportData()" style="background:#d8eddd; color:#2d6a4f;">📥 Xuất JSON</button>
+        // Thêm các nút admin vào header - nhưng chỉ hiển thị khi có ?mode=admin
+        const adminButtonsHTML = `
+            <button class="btn btn-white admin-only" onclick="exportData()" style="background:#d8eddd; color:#2d6a4f;">📥 Xuất JSON</button>
             <button class="btn btn-outline admin-only" onclick="document.getElementById('fileInput').click()">📤 Import JSON</button>
             <button class="btn btn-white admin-only" onclick="syncToFirebase()" style="background:#d8eddd; color:#2d6a4f;">☁️ Sync</button>
             <input type="file" id="fileInput" accept=".json" style="display:none" onchange="handleFile(event)">
-        `);
+        `;
+        document.querySelector('.header-right').insertAdjacentHTML('afterbegin', adminButtonsHTML);
 
         clearDefaultData();
 
-        if (sessionStorage.getItem('isAdmin') === 'true') {
-            isAdmin = true;
-            isAdminMode = true;
-            enableAdminMode();
-            loadFromFirebase();
-            startAutoSync();
-        } else {
-            startAutoSync();
-            loadFromFirebase();
-        }
-
-        const mode = getUrlParam('mode');
-        if (mode === 'admin') {
-            if (!isAdmin) {
+        // Nếu URL có ?mode=admin, tự động hiển thị giao diện admin
+        if (isAdminModeFromURL) {
+            // Kiểm tra sessionStorage trước
+            if (sessionStorage.getItem('isAdmin') === 'true') {
+                isAdmin = true;
+                isAdminMode = true;
+                enableAdminMode();
+                loadFromFirebase();
+                startAutoSync();
+            } else {
+                // Hiển thị login overlay
                 document.getElementById('loginOverlay').classList.add('show');
+                document.getElementById('loginEmail').value = ADMIN_EMAIL;
+                document.getElementById('loginPassword').value = '';
+                document.getElementById('loginError').classList.remove('show');
+                // Vẫn load dữ liệu để xem
+                loadFromFirebase();
+                startAutoSync();
             }
+        } else {
+            // Chế độ xem bình thường - ẩn tất cả admin
+            loadFromFirebase();
+            startAutoSync();
         }
 
         renderAll();
@@ -2446,6 +2470,7 @@
             }
         });
 
+        // Ẩn cột thao tác khi không phải admin
         document.querySelectorAll('.score-table th:last-child, .score-table td:last-child').forEach(el => {
             el.style.display = 'none';
         });
