@@ -1031,10 +1031,120 @@
             background: #c0392b;
             transform: scale(1.05);
         }
+
+        /* Modal thêm học sinh */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(15, 23, 42, 0.7);
+            backdrop-filter: blur(4px);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 9998;
+        }
+
+        .modal-overlay.show {
+            display: flex;
+        }
+
+        .modal-box {
+            background: white;
+            border-radius: 24px;
+            padding: 32px 36px;
+            max-width: 480px;
+            width: 90%;
+            box-shadow: 0 24px 48px rgba(0,0,0,0.25);
+        }
+
+        .modal-box h2 {
+            color: #1a3a2e;
+            font-size: 1.3rem;
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .modal-box p {
+            color: #6b8c7e;
+            font-size: 0.9rem;
+            margin-bottom: 20px;
+        }
+
+        .modal-box .form-group {
+            margin-bottom: 16px;
+        }
+
+        .modal-box .form-group label {
+            display: block;
+            font-weight: 600;
+            color: #2d6a4f;
+            font-size: 0.9rem;
+            margin-bottom: 4px;
+        }
+
+        .modal-box .form-group input {
+            width: 100%;
+            padding: 10px 14px;
+            border: 2px solid #d8eddd;
+            border-radius: 10px;
+            font-size: 0.95rem;
+            font-family: inherit;
+            transition: border 0.2s;
+            background: #f8fbf9;
+        }
+
+        .modal-box .form-group input:focus {
+            border-color: #52b788;
+            outline: none;
+        }
+
+        .modal-box .form-group .hint {
+            font-size: 0.75rem;
+            color: #8aa99a;
+            margin-top: 2px;
+        }
+
+        .modal-box .modal-actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 20px;
+            justify-content: flex-end;
+        }
+
+        .modal-box .modal-actions .btn {
+            padding: 10px 24px;
+            font-size: 0.95rem;
+        }
+
+        .btn-add-student {
+            background: #2d6a4f;
+            color: white;
+            padding: 8px 18px;
+            border: none;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-add-student:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(45, 106, 79, 0.3);
+        }
     </style>
 </head>
 <body>
 
+<!-- Login Overlay -->
 <div class="login-overlay" id="loginOverlay">
     <div class="login-box">
         <div class="lock-icon">🔐</div>
@@ -1047,6 +1157,35 @@
         <p style="margin-top:12px; font-size:0.8rem; color:#8aa99a;">
             💡 Liên hệ cô Quỳnh Nhi để được cấp mật khẩu
         </p>
+    </div>
+</div>
+
+<!-- Modal thêm học sinh -->
+<div class="modal-overlay" id="addStudentModal">
+    <div class="modal-box">
+        <h2>➕ Thêm học sinh mới</h2>
+        <p>Nhập thông tin học sinh để thêm vào danh sách</p>
+        <div class="form-group">
+            <label>Mã số học sinh *</label>
+            <input type="text" id="newStudentId" placeholder="VD: HS001" oninput="this.value = this.value.toUpperCase()">
+            <div class="hint">Mã số duy nhất, không trùng với học sinh khác</div>
+        </div>
+        <div class="form-group">
+            <label>Họ và tên *</label>
+            <input type="text" id="newStudentName" placeholder="VD: Nguyễn Văn A">
+        </div>
+        <div class="form-group">
+            <label>Số buổi nghỉ</label>
+            <input type="number" id="newStudentAbsences" min="0" value="0">
+        </div>
+        <div class="form-group">
+            <label>Nhận xét</label>
+            <input type="text" id="newStudentNote" placeholder="Nhận xét ban đầu (không bắt buộc)">
+        </div>
+        <div class="modal-actions">
+            <button class="btn btn-outline" onclick="closeAddStudentModal()" style="border-color:#d8eddd; color:#6b8c7e;">Hủy</button>
+            <button class="btn btn-success" onclick="addNewStudent()" style="background:#2d6a4f; color:white;">➕ Thêm học sinh</button>
+        </div>
     </div>
 </div>
 
@@ -1066,16 +1205,25 @@
 
     <div class="admin-view" id="adminView">
         <div class="import-area admin-only-panel" id="importArea">
-            <div class="drop-zone" id="dropZone">
-                <span class="icon">📂</span>
-                <p>Kéo thả file JSON vào đây hoặc nhấn để chọn</p>
-                <div class="hint">Hỗ trợ file .json với cấu trúc: danh sách học sinh, điểm theo tháng</div>
-            </div>
-            <div class="file-info" id="fileInfo">
-                <span class="file-name" id="fileName">data.json</span>
-                <span class="file-size" id="fileSize"></span>
-                <div class="file-actions">
-                    <button class="btn btn-danger" onclick="clearAllData()" style="padding:4px 14px; font-size:0.75rem;">🗑️ Xóa tất cả</button>
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:16px;">
+                <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                    <div class="drop-zone" id="dropZone" style="padding:16px 24px; display:flex; align-items:center; gap:16px; cursor:pointer;">
+                        <span class="icon" style="font-size:1.8rem; margin-bottom:0;">📂</span>
+                        <div>
+                            <p style="font-size:0.9rem;">Kéo thả JSON hoặc nhấn để chọn</p>
+                            <div class="hint">Hỗ trợ .json</div>
+                        </div>
+                    </div>
+                    <button class="btn btn-add-student" onclick="openAddStudentModal()" style="background:#2d6a4f; color:white; padding:10px 20px; border:none; border-radius:10px; font-weight:600; font-size:0.9rem; cursor:pointer;">
+                        ➕ Thêm học sinh
+                    </button>
+                </div>
+                <div class="file-info" id="fileInfo" style="display:none; margin-top:0; padding:6px 16px;">
+                    <span class="file-name" id="fileName">data.json</span>
+                    <span class="file-size" id="fileSize"></span>
+                    <div class="file-actions">
+                        <button class="btn btn-danger admin-only" onclick="clearAllData()" style="padding:4px 14px; font-size:0.75rem;">🗑️ Xóa tất cả</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1109,7 +1257,7 @@
                     <div class="empty-state">
                         <span class="icon">📂</span>
                         <p>Chưa có dữ liệu học sinh</p>
-                        <p style="font-size:0.85rem; margin-top:4px;">Hãy import file JSON để bắt đầu</p>
+                        <p style="font-size:0.85rem; margin-top:4px;">Hãy import file JSON hoặc thêm học sinh mới</p>
                     </div>
                 </div>
             </div>
@@ -1567,6 +1715,97 @@
         event.target.value = '';
     }
 
+    // ============ HÀM THÊM HỌC SINH MỚI ============
+
+    function openAddStudentModal() {
+        if (!isAdmin) {
+            showToast('❌ Cần quyền Admin để thêm học sinh', 'error');
+            return;
+        }
+        document.getElementById('addStudentModal').classList.add('show');
+        document.getElementById('newStudentId').value = '';
+        document.getElementById('newStudentName').value = '';
+        document.getElementById('newStudentAbsences').value = '0';
+        document.getElementById('newStudentNote').value = '';
+        document.getElementById('newStudentId').focus();
+    }
+
+    function closeAddStudentModal() {
+        document.getElementById('addStudentModal').classList.remove('show');
+    }
+
+    function addNewStudent() {
+        const id = document.getElementById('newStudentId').value.trim().toUpperCase();
+        const name = document.getElementById('newStudentName').value.trim();
+        const absences = parseInt(document.getElementById('newStudentAbsences').value) || 0;
+        const note = document.getElementById('newStudentNote').value.trim();
+
+        if (!id) {
+            showToast('❌ Vui lòng nhập mã số học sinh', 'error');
+            document.getElementById('newStudentId').focus();
+            return;
+        }
+        if (!name) {
+            showToast('❌ Vui lòng nhập họ tên học sinh', 'error');
+            document.getElementById('newStudentName').focus();
+            return;
+        }
+
+        // Kiểm tra trùng mã số
+        if (students.some(s => s.id === id)) {
+            showToast(`❌ Mã số "${id}" đã tồn tại!`, 'error');
+            document.getElementById('newStudentId').focus();
+            document.getElementById('newStudentId').select();
+            return;
+        }
+
+        // Tạo học sinh mới
+        const newStudent = {
+            id: id,
+            name: name,
+            absences: absences,
+            note: note,
+            scores: []
+        };
+
+        students.push(newStudent);
+        currentStudentId = id;
+
+        // Lưu lên Firebase
+        db.ref(`${CLASS_PATH}/students/${id}`).set(newStudent)
+            .then(() => {
+                return db.ref(`${CLASS_PATH}/updatedAt`).set(firebase.database.ServerValue.TIMESTAMP);
+            })
+            .then(() => {
+                closeAddStudentModal();
+                renderAll();
+                showToast(`✅ Đã thêm học sinh "${name}" (${id})`);
+                updateSyncStatus('synced', `(${students.length} học sinh)`);
+            })
+            .catch((error) => {
+                showToast('❌ Lỗi lưu lên Firebase: ' + error.message, 'error');
+                // Vẫn render lại nhưng có thể mất dữ liệu nếu lỗi
+                renderAll();
+            });
+    }
+
+    // Đóng modal khi click ra ngoài
+    document.getElementById('addStudentModal').addEventListener('click', function(e) {
+        if (e.target === this) closeAddStudentModal();
+    });
+
+    // Cho phép Enter để thêm học sinh
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && document.getElementById('addStudentModal').classList.contains('show')) {
+            if (document.activeElement === document.getElementById('newStudentId') ||
+                document.activeElement === document.getElementById('newStudentName') ||
+                document.activeElement === document.getElementById('newStudentAbsences') ||
+                document.activeElement === document.getElementById('newStudentNote')) {
+                addNewStudent();
+            }
+        }
+    });
+
     // ============ HÀM IMPORT - GỘP DỮ LIỆU ============
 
     function importFile(file) {
@@ -1794,7 +2033,6 @@
             tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:#6b8c7e;">Chưa có điểm</td></tr>`;
         } else {
             let html = '';
-            // KHÔNG sắp xếp nữa - giữ nguyên thứ tự như trong mảng
             nums.forEach((sc, idx) => {
                 const cls = sc.score >= 8 ? 'score-high' : (sc.score < 5 ? 'score-low' : '');
                 const isAdmin = isAdminMode;
@@ -1853,8 +2091,6 @@
         showToast('✅ Đã cập nhật điểm');
     }
 
-    // ============ HÀM XÓA ĐIỂM ============
-
     function deleteScore(index) {
         if (!isAdmin) return;
         if (!confirm('Xóa điểm này?')) return;
@@ -1872,8 +2108,6 @@
         showToast('✅ Đã xóa điểm');
     }
 
-    // ============ HÀM THÊM ĐIỂM - THÊM VÀO CUỐI DANH SÁCH ============
-
     function addScoreRow() {
         if (!isAdmin) return;
         const student = students.find(s => s.id === currentStudentId);
@@ -1883,7 +2117,6 @@
         }
         if (!student.scores) student.scores = [];
         
-        // Lấy tháng của điểm cuối cùng (nếu có)
         let lastMonth = 1;
         if (student.scores.length > 0) {
             const lastScore = student.scores[student.scores.length - 1];
@@ -1892,7 +2125,6 @@
             }
         }
         
-        // Thêm vào CUỐI mảng
         student.scores.push({ 
             month: lastMonth, 
             testName: `Bài kiểm tra mới (${student.scores.length})`, 
@@ -2141,7 +2373,6 @@
             listContainer.innerHTML = '<p style="color:#6b8c7e;text-align:center;padding:20px 0;">Chưa có bài kiểm tra nào</p>';
         } else {
             let html = '';
-            // Giữ nguyên thứ tự như trong mảng
             nums.forEach(sc => {
                 const cls = sc.score >= 8 ? 'score-high' : (sc.score < 5 ? 'score-low' : '');
                 html += `
@@ -2231,7 +2462,6 @@
             return;
         }
 
-        // Giữ nguyên thứ tự hiển thị
         const labels = nums.map(s => `${getMonthName(s.month)}${s.testName ? ' - ' + s.testName : ''}`);
         const data = nums.map(s => s.score);
 
@@ -2418,7 +2648,7 @@
     }
 
     function init() {
-        // Thêm các nút admin vào header - nhưng chỉ hiển thị khi có ?mode=admin
+        // Thêm các nút admin vào header
         const adminButtonsHTML = `
             <button class="btn btn-white admin-only" onclick="exportData()" style="background:#d8eddd; color:#2d6a4f;">📥 Xuất JSON</button>
             <button class="btn btn-outline admin-only" onclick="document.getElementById('fileInput').click()">📤 Import JSON</button>
@@ -2429,9 +2659,7 @@
 
         clearDefaultData();
 
-        // Nếu URL có ?mode=admin, tự động hiển thị giao diện admin
         if (isAdminModeFromURL) {
-            // Kiểm tra sessionStorage trước
             if (sessionStorage.getItem('isAdmin') === 'true') {
                 isAdmin = true;
                 isAdminMode = true;
@@ -2439,17 +2667,14 @@
                 loadFromFirebase();
                 startAutoSync();
             } else {
-                // Hiển thị login overlay
                 document.getElementById('loginOverlay').classList.add('show');
                 document.getElementById('loginEmail').value = ADMIN_EMAIL;
                 document.getElementById('loginPassword').value = '';
                 document.getElementById('loginError').classList.remove('show');
-                // Vẫn load dữ liệu để xem
                 loadFromFirebase();
                 startAutoSync();
             }
         } else {
-            // Chế độ xem bình thường - ẩn tất cả admin
             loadFromFirebase();
             startAutoSync();
         }
@@ -2470,7 +2695,6 @@
             }
         });
 
-        // Ẩn cột thao tác khi không phải admin
         document.querySelectorAll('.score-table th:last-child, .score-table td:last-child').forEach(el => {
             el.style.display = 'none';
         });
