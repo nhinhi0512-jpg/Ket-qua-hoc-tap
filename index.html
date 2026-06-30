@@ -345,6 +345,8 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
         }
 
         .panel-title .badge {
@@ -707,6 +709,11 @@
             color: #2d6a4f;
             font-size: 1rem;
             margin-bottom: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
         }
 
         .student-view .score-list .score-item {
@@ -1032,7 +1039,6 @@
             transform: scale(1.05);
         }
 
-        /* Modal thêm học sinh */
         .modal-overlay {
             position: fixed;
             top: 0;
@@ -1139,6 +1145,100 @@
         .btn-add-student:hover {
             transform: translateY(-2px);
             box-shadow: 0 8px 20px rgba(45, 106, 79, 0.3);
+        }
+
+        .month-selector {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+        }
+
+        .month-selector label {
+            font-weight: 600;
+            color: #2d6a4f;
+            font-size: 0.9rem;
+        }
+
+        .month-selector select {
+            padding: 6px 12px;
+            border: 2px solid #d8eddd;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-family: inherit;
+            background: white;
+            cursor: pointer;
+        }
+
+        .month-selector select:focus {
+            border-color: #52b788;
+            outline: none;
+        }
+
+        .month-selector .btn-month {
+            padding: 4px 12px;
+            border: 2px solid #d8eddd;
+            border-radius: 8px;
+            background: white;
+            color: #2d6a4f;
+            font-weight: 600;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .month-selector .btn-month:hover {
+            background: #e8f5ee;
+            border-color: #52b788;
+        }
+
+        .month-selector .btn-month.active {
+            background: #2d6a4f;
+            color: white;
+            border-color: #2d6a4f;
+        }
+
+        .month-tabs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 12px;
+        }
+
+        .month-tab {
+            padding: 4px 14px;
+            border: 2px solid #d8eddd;
+            border-radius: 20px;
+            background: white;
+            color: #2d6a4f;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .month-tab:hover {
+            background: #e8f5ee;
+            border-color: #52b788;
+        }
+
+        .month-tab.active {
+            background: #2d6a4f;
+            color: white;
+            border-color: #2d6a4f;
+        }
+
+        .month-tab .count {
+            background: rgba(255,255,255,0.2);
+            border-radius: 10px;
+            padding: 0 8px;
+            font-size: 0.7rem;
+            margin-left: 4px;
+        }
+
+        .month-tab.active .count {
+            background: rgba(255,255,255,0.2);
         }
     </style>
 </head>
@@ -1292,10 +1392,16 @@
                     </div>
 
                     <div style="margin-top:8px;">
-                        <div style="font-weight:600; color:#2d6a4f; margin-bottom:6px; font-size:0.9rem; display:flex; justify-content:space-between; align-items:center;">
+                        <div style="font-weight:600; color:#2d6a4f; margin-bottom:6px; font-size:0.9rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
                             <span>📝 Bảng điểm theo tháng</span>
-                            <button class="btn-add-score admin-only-panel" onclick="addScoreRow()">+ Thêm điểm</button>
+                            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                                <button class="btn-add-score admin-only-panel" onclick="addScoreRow()">+ Thêm điểm</button>
+                            </div>
                         </div>
+                        
+                        <!-- Month tabs for admin -->
+                        <div class="month-tabs" id="adminMonthTabs"></div>
+                        
                         <div class="score-table-wrap">
                             <table class="score-table" id="scoreTable">
                                 <thead>
@@ -1381,7 +1487,15 @@
         </div>
 
         <div class="score-list">
-            <h3>📝 Danh sách bài kiểm tra</h3>
+            <h3>
+                <span>📝 Danh sách bài kiểm tra</span>
+                <div class="month-selector">
+                    <label for="viewMonthFilter">Lọc theo tháng:</label>
+                    <select id="viewMonthFilter" onchange="renderStudentView()">
+                        <option value="all">Tất cả</option>
+                    </select>
+                </div>
+            </h3>
             <div id="viewScoreList">
                 <p style="color:#6b8c7e; text-align:center; padding:20px 0;">Chọn học sinh để xem điểm</p>
             </div>
@@ -1431,6 +1545,7 @@
 
     let currentChartMonth = null;
     let currentComparisonMonth = null;
+    let currentAdminMonthFilter = null; // Lọc tháng trong admin
 
     // Kiểm tra URL param mode=admin
     const isAdminModeFromURL = new URLSearchParams(window.location.search).get('mode') === 'admin';
@@ -1751,7 +1866,6 @@
             return;
         }
 
-        // Kiểm tra trùng mã số
         if (students.some(s => s.id === id)) {
             showToast(`❌ Mã số "${id}" đã tồn tại!`, 'error');
             document.getElementById('newStudentId').focus();
@@ -1759,7 +1873,6 @@
             return;
         }
 
-        // Tạo học sinh mới
         const newStudent = {
             id: id,
             name: name,
@@ -1771,7 +1884,6 @@
         students.push(newStudent);
         currentStudentId = id;
 
-        // Lưu lên Firebase
         db.ref(`${CLASS_PATH}/students/${id}`).set(newStudent)
             .then(() => {
                 return db.ref(`${CLASS_PATH}/updatedAt`).set(firebase.database.ServerValue.TIMESTAMP);
@@ -1784,17 +1896,14 @@
             })
             .catch((error) => {
                 showToast('❌ Lỗi lưu lên Firebase: ' + error.message, 'error');
-                // Vẫn render lại nhưng có thể mất dữ liệu nếu lỗi
                 renderAll();
             });
     }
 
-    // Đóng modal khi click ra ngoài
     document.getElementById('addStudentModal').addEventListener('click', function(e) {
         if (e.target === this) closeAddStudentModal();
     });
 
-    // Cho phép Enter để thêm học sinh
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Enter' && document.getElementById('addStudentModal').classList.contains('show')) {
             if (document.activeElement === document.getElementById('newStudentId') ||
@@ -1806,7 +1915,7 @@
         }
     });
 
-    // ============ HÀM IMPORT - GỘP DỮ LIỆU ============
+    // ============ HÀM IMPORT ============
 
     function importFile(file) {
         if (!isAdmin) {
@@ -1922,6 +2031,8 @@
         populateStudentSelect();
         populateCompareCheckboxes();
         populateMonthSelects();
+        renderAdminMonthTabs();
+        populateViewMonthFilter();
     }
 
     function renderStats() {
@@ -2000,14 +2111,45 @@
 
     function selectStudent(id) {
         currentStudentId = id;
+        currentAdminMonthFilter = null; // Reset filter khi đổi học sinh
         renderStudentList();
         renderDetailById(id);
         renderStudentView();
         populateStudentSelect();
         populateCompareCheckboxes();
+        renderAdminMonthTabs();
     }
 
-    // ============ HÀM RENDER CHI TIẾT ============
+    // ============ HÀM RENDER CHI TIẾT (Admin) ============
+
+    function renderAdminMonthTabs() {
+        const container = document.getElementById('adminMonthTabs');
+        const student = students.find(s => s.id === currentStudentId);
+        if (!student || !student.scores || student.scores.length === 0) {
+            container.innerHTML = '<span style="color:#6b8c7e; font-size:0.8rem;">Chưa có dữ liệu</span>';
+            return;
+        }
+
+        const monthSet = new Set();
+        student.scores.forEach(sc => {
+            if (sc.month) monthSet.add(sc.month);
+        });
+        const months = Array.from(monthSet).sort((a,b) => a - b);
+
+        let html = `<button class="month-tab ${currentAdminMonthFilter === null ? 'active' : ''}" onclick="setAdminMonthFilter(null)">Tất cả <span class="count">${student.scores.length}</span></button>`;
+        months.forEach(m => {
+            const count = student.scores.filter(sc => sc.month === m).length;
+            const active = currentAdminMonthFilter === m ? 'active' : '';
+            html += `<button class="month-tab ${active}" onclick="setAdminMonthFilter(${m})">${getMonthName(m)} <span class="count">${count}</span></button>`;
+        });
+        container.innerHTML = html;
+    }
+
+    function setAdminMonthFilter(month) {
+        currentAdminMonthFilter = month;
+        renderAdminMonthTabs();
+        renderDetailById(currentStudentId);
+    }
 
     function renderDetailById(id) {
         const student = students.find(s => s.id === id);
@@ -2027,33 +2169,43 @@
         document.getElementById('detailNote').value = student.note || '';
 
         const tbody = document.getElementById('scoreBody');
-        const nums = student.scores || [];
+        let scores = student.scores || [];
         
-        if (nums.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:#6b8c7e;">Chưa có điểm</td></tr>`;
+        // Lọc theo tháng nếu có
+        if (currentAdminMonthFilter !== null) {
+            scores = scores.filter(sc => sc.month === currentAdminMonthFilter);
+        }
+
+        // Sắp xếp theo tháng
+        scores.sort((a, b) => (a.month || 0) - (b.month || 0));
+        
+        if (scores.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:#6b8c7e;">${currentAdminMonthFilter !== null ? `Chưa có điểm cho ${getMonthName(currentAdminMonthFilter)}` : 'Chưa có điểm'}</td></tr>`;
         } else {
             let html = '';
-            nums.forEach((sc, idx) => {
+            scores.forEach((sc, idx) => {
                 const cls = sc.score >= 8 ? 'score-high' : (sc.score < 5 ? 'score-low' : '');
                 const isAdmin = isAdminMode;
+                // Tìm index gốc để cập nhật
+                const originalIdx = student.scores.indexOf(sc);
                 html += `<tr>
                     <td>
                         ${isAdmin ? `<input type="number" min="1" max="12" value="${sc.month}" 
-                            onchange="updateScore(${idx}, 'month', this.value)" 
+                            onchange="updateScore(${originalIdx}, 'month', this.value)" 
                             style="width:80px;" step="1">` : getMonthName(sc.month)}
                     </td>
                     <td>
                         ${isAdmin ? `<input type="text" value="${sc.testName || 'Kiểm tra'}" 
-                            onchange="updateScore(${idx}, 'testName', this.value)" 
+                            onchange="updateScore(${originalIdx}, 'testName', this.value)" 
                             style="min-width:120px;">` : (sc.testName || 'Kiểm tra')}
                     </td>
                     <td>
                         ${isAdmin ? `<input type="number" min="0" max="10" step="0.01" value="${sc.score}" 
-                            onchange="updateScore(${idx}, 'score', parseFloat(this.value))" 
+                            onchange="updateScore(${originalIdx}, 'score', parseFloat(this.value))" 
                             style="width:80px;" class="${cls}">` : `<span class="${cls}">${sc.score}</span>`}
                     </td>
                     <td style="display:${isAdmin ? '' : 'none'}; text-align:center;">
-                        <button class="score-action-btn" style="background:#e74c3c; color:white; padding:4px 12px;" onclick="deleteScore(${idx})">🗑️ Xóa</button>
+                        <button class="score-action-btn" style="background:#e74c3c; color:white; padding:4px 12px;" onclick="deleteScore(${originalIdx})">🗑️ Xóa</button>
                     </td>
                 </tr>`;
             });
@@ -2117,23 +2269,32 @@
         }
         if (!student.scores) student.scores = [];
         
-        let lastMonth = 1;
-        if (student.scores.length > 0) {
-            const lastScore = student.scores[student.scores.length - 1];
-            if (lastScore && lastScore.month) {
-                lastMonth = lastScore.month;
-            }
+        // Hỏi tháng muốn thêm
+        const monthInput = prompt('Nhập tháng cho bài kiểm tra mới (1-12):', 
+            currentAdminMonthFilter !== null ? currentAdminMonthFilter : '1');
+        if (monthInput === null) return;
+        
+        const month = parseInt(monthInput);
+        if (isNaN(month) || month < 1 || month > 12) {
+            showToast('❌ Tháng không hợp lệ (1-12)', 'error');
+            return;
         }
         
+        const testName = prompt('Tên bài kiểm tra:', `Bài kiểm tra tháng ${month}`);
+        if (testName === null) return;
+        
         student.scores.push({ 
-            month: lastMonth, 
-            testName: `Bài kiểm tra mới (${student.scores.length})`, 
+            month: month, 
+            testName: testName || `Bài kiểm tra tháng ${month}`, 
             score: 0 
         });
         
+        // Tự động lọc theo tháng vừa thêm
+        currentAdminMonthFilter = month;
+        
         renderAll();
         syncToFirebase(true);
-        showToast('✅ Đã thêm điểm mới vào cuối danh sách');
+        showToast(`✅ Đã thêm điểm mới cho tháng ${month}`);
     }
 
     function updateAbsences() {
@@ -2201,6 +2362,19 @@
         });
         if (current && students.some(s => s.id === current)) select.value = current;
         else if (currentStudentId) select.value = currentStudentId;
+    }
+
+    function populateViewMonthFilter() {
+        const select = document.getElementById('viewMonthFilter');
+        const months = getAllMonths();
+        const current = select.value;
+        select.innerHTML = '<option value="all">Tất cả</option>';
+        months.forEach(m => {
+            select.innerHTML += `<option value="${m}">${getMonthName(m)}</option>`;
+        });
+        if (current && months.some(m => m.toString() === current)) {
+            select.value = current;
+        }
     }
 
     function populateMonthSelects() {
@@ -2323,6 +2497,7 @@
                 renderDetailById(currentStudentId);
                 renderStudentList();
                 populateCompareCheckboxes();
+                renderAdminMonthTabs();
             }
         }
     }
@@ -2355,8 +2530,19 @@
             absBadge.style.display = 'none';
         }
 
-        const nums = getNumericScores(student);
-        const avg = getStudentAvg(student);
+        // Lọc điểm theo tháng cho view
+        const filterSelect = document.getElementById('viewMonthFilter');
+        const filterMonth = filterSelect.value !== 'all' ? parseInt(filterSelect.value) : null;
+        
+        let nums = getNumericScores(student);
+        if (filterMonth !== null) {
+            nums = nums.filter(sc => sc.month === filterMonth);
+        }
+
+        // Sắp xếp theo tháng
+        nums.sort((a, b) => (a.month || 0) - (b.month || 0));
+
+        const avg = nums.length > 0 ? nums.reduce((a,b) => a + b.score, 0) / nums.length : 0;
         document.getElementById('viewAvg').textContent = avg.toFixed(1);
         document.getElementById('viewTotalTests').textContent = nums.length;
         if (nums.length) {
@@ -2370,7 +2556,7 @@
 
         const listContainer = document.getElementById('viewScoreList');
         if (nums.length === 0) {
-            listContainer.innerHTML = '<p style="color:#6b8c7e;text-align:center;padding:20px 0;">Chưa có bài kiểm tra nào</p>';
+            listContainer.innerHTML = `<p style="color:#6b8c7e;text-align:center;padding:20px 0;">${filterMonth !== null ? `Chưa có bài kiểm tra cho ${getMonthName(filterMonth)}` : 'Chưa có bài kiểm tra nào'}</p>`;
         } else {
             let html = '';
             nums.forEach(sc => {
@@ -2446,6 +2632,9 @@
             currentChartMonth = null;
         }
 
+        // Sắp xếp theo tháng
+        nums.sort((a, b) => (a.month || 0) - (b.month || 0));
+
         if (nums.length === 0) {
             chartInstance = new Chart(ctx, {
                 type: 'line',
@@ -2503,7 +2692,7 @@
         });
     }
 
-    // ============ HÀM CẬP NHẬT BIỂU ĐỒ SO SÁNH (DẠNG CỘT) ============
+    // ============ HÀM CẬP NHẬT BIỂU ĐỒ SO SÁNH ============
     function updateComparisonChart() {
         const ctx = document.getElementById('comparisonChart').getContext('2d');
         if (comparisonChartInstance) { comparisonChartInstance.destroy(); comparisonChartInstance = null; }
